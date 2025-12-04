@@ -1,0 +1,584 @@
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>博物馆智能路线推荐系统</title>
+    <!-- Tailwind CSS v3 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <!-- 统一的 Tailwind 配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1a365d',      // 深蓝色
+                        secondary: '#c9b037',    // 金色
+                        accent: '#d4af37',       // 亮金色
+                        neutral: '#f5f5f5',      // 浅灰色
+                        'dark-gray': '#333333',  // 深灰色
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .text-shadow {
+                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            }
+            .bg-gradient-primary {
+                background: linear-gradient(135deg, #1a365d 0%, #2a4365 100%);
+            }
+            .bg-gradient-gold {
+                background: linear-gradient(135deg, #c9b037 0%, #f1d65b 100%);
+            }
+            .transition-all-300 {
+                transition: all 300ms ease-in-out;
+            }
+            .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+            }
+            .scrollbar-hide {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+        }
+    </style>
+    <style>
+        /* 自定义样式 */
+        .route-point {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: #c9b037;
+            border: 2px solid #1a365d;
+            position: absolute;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            z-index: 10;
+        }
+        
+        .route-point:hover {
+            transform: scale(1.2);
+        }
+        
+        .route-point.active {
+            background-color: #e63946;
+            box-shadow: 0 0 0 4px rgba(230, 57, 70, 0.3);
+        }
+        
+        .timeline-item {
+            position: relative;
+        }
+        
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 2px;
+            background-color: #c9b037;
+        }
+        
+        .timeline-dot {
+            position: absolute;
+            left: -5px;
+            top: 0;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #c9b037;
+            border: 2px solid #1a365d;
+        }
+        
+        /* 动画效果 */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .animate-fadeIn {
+            animation: fadeIn 0.5s ease forwards;
+        }
+        
+        .animate-delay-100 { animation-delay: 0.1s; }
+        .animate-delay-200 { animation-delay: 0.2s; }
+        .animate-delay-300 { animation-delay: 0.3s; }
+        .animate-delay-400 { animation-delay: 0.4s; }
+        .animate-delay-500 { animation-delay: 0.5s; }
+        
+        /* 博物馆地图样式 */
+        .museum-map {
+            position: relative;
+            width: 100%;
+            height: 500px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            overflow: hidden;
+        }
+        
+        /* 路线动画 */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .pulse-animation {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        
+        /* 自定义滑块样式 */
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: #d3d3d3;
+            outline: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #c9b037;
+            cursor: pointer;
+            border: 2px solid #1a365d;
+        }
+        
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #c9b037;
+            cursor: pointer;
+            border: 2px solid #1a365d;
+        }
+        
+        /* 加载动画 */
+        .loader {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid #c9b037;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .museum-map {
+                height: 350px;
+            }
+            
+            .route-point {
+                width: 20px;
+                height: 20px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <!-- 顶部导航栏 -->
+    <header class="bg-gradient-primary text-white shadow-lg">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center">
+                <i class="fa fa-university text-3xl text-secondary mr-3"></i>
+                <div>
+                    <h1 class="text-2xl font-bold">博物馆智能路线推荐</h1>
+                    <p class="text-sm text-gray-300">探索文化瑰宝，定制专属旅程</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主要内容区域 -->
+    <main class="container mx-auto px-4 py-8">
+        <!-- 路线推荐系统 -->
+        <section id="route-recommender" class="bg-white rounded-xl shadow-xl p-6 mb-12">
+            <h2 class="text-3xl font-bold text-primary mb-6 flex items-center">
+                <i class="fa fa-map-o text-secondary mr-3"></i> 智能路线推荐
+            </h2>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- 用户偏好选择面板 -->
+                <div class="lg:col-span-1 bg-gray-50 rounded-lg p-6 shadow-inner">
+                    <h3 class="text-xl font-semibold text-primary mb-4">您的参观偏好</h3>
+                    
+                    <form id="preference-form" class="space-y-6">
+                        <!-- 年龄组选择 -->
+                        <div>
+                            <label class="block text-gray-700 font-medium mb-2">年龄组</label>
+                            <div class="grid grid-cols-3 gap-3">
+                                <div class="age-group-option">
+                                    <input type="radio" id="age-child" name="age-group" value="child" class="hidden peer" required="">
+                                    <label for="age-child" class="block p-3 bg-white border-2 border-gray-200 rounded-lg text-center cursor-pointer peer-checked:border-secondary peer-checked:bg-gray-100 transition-all-300">
+                                        <i class="fa fa-child text-secondary text-xl mb-1"></i>
+                                        <span class="block text-sm">儿童</span>
+                                    </label>
+                                </div>
+                                <div class="age-group-option">
+                                    <input type="radio" id="age-teen" name="age-group" value="teen" class="hidden peer">
+                                    <label for="age-teen" class="block p-3 bg-white border-2 border-gray-200 rounded-lg text-center cursor-pointer peer-checked:border-secondary peer-checked:bg-gray-100 transition-all-300">
+                                        <i class="fa fa-graduation-cap text-secondary text-xl mb-1"></i>
+                                        <span class="block text-sm">青少年</span>
+                                    </label>
+                                </div>
+                                <div class="age-group-option">
+                                    <input type="radio" id="age-adult" name="age-group" value="adult" class="hidden peer" checked="">
+                                    <label for="age-adult" class="block p-3 bg-white border-2 border-gray-200 rounded-lg text-center cursor-pointer peer-checked:border-secondary peer-checked:bg-gray-100 transition-all-300">
+                                        <i class="fa fa-user text-secondary text-xl mb-1"></i>
+                                        <span class="block text-sm">成人</span>
+                                    </label>
+                                </div>
+                                <div class="age-group-option">
+                                    <input type="radio" id="age-senior" name="age-group" value="senior" class="hidden peer">
+                                    <label for="age-senior" class="block p-3 bg-white border-2 border-gray-200 rounded-lg text-center cursor-pointer peer-checked:border-secondary peer-checked:bg-gray-100 transition-all-300">
+                                        <i class="fa fa-user-circle text-secondary text-xl mb-1"></i>
+                                        <span class="block text-sm">老年</span>
+                                    </label>
+                                </div>
+                                <div class="age-group-option">
+                                    <input type="radio" id="age-family" name="age-group" value="family" class="hidden peer">
+                                    <label for="age-family" class="block p-3 bg-white border-2 border-gray-200 rounded-lg text-center cursor-pointer peer-checked:border-secondary peer-checked:bg-gray-100 transition-all-300">
+                                        <i class="fa fa-users text-secondary text-xl mb-1"></i>
+                                        <span class="block text-sm">家庭</span>
+                                    </label>
+                                </div>
+                                <div class="age-group-option">
+                                    <input type="radio" id="age-group" name="age-group" value="group" class="hidden peer">
+                                    <label for="age-group" class="block p-3 bg-white border-2 border-gray-200 rounded-lg text-center cursor-pointer peer-checked:border-secondary peer-checked:bg-gray-100 transition-all-300">
+                                        <i class="fa fa-building text-secondary text-xl mb-1"></i>
+                                        <span class="block text-sm">团体</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 兴趣类别选择 -->
+                        <div>
+                            <label class="block text-gray-700 font-medium mb-2">兴趣类别 (可多选)</label>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="interest-option">
+                                    <input type="checkbox" id="interest-history" name="interests" value="history" class="hidden peer" checked="">
+                                    <label for="interest-history" class="flex items-center p-3 bg-white border-2 border-gray-200 rounded-lg cursor-pointer peer-checked:border-secondary peer-checked:bg-gray-100 transition-all-300">
+                                        <i class="fa fa-book text-secondary mr-2"></i>
+                                        <span>故事性</span>
+                                    </label>
+                                </div>
+                                <div class="interest-option">
+                                    <input type="checkbox" id="interest-art" name="interests" value="art" class="hidden peer">
+                                    <label for="interest-art" class="flex items-center p-3 bg-white border-2 border-gray-200 rounded-lg cursor-pointer peer-checked:border-secondary peer-checked:bg-gray-100 transition-all-300">
+                                        <i class="fa fa-gamepad text-secondary mr-2"></i>
+                                        <span>趣味互动</span>
+                                    </label>
+                                </div>
+                                <div class="interest-option">
+                                    <input type="checkbox" id="interest-science" name="interests" value="science" class="hidden peer">
+                                    <label for="interest-science" class="flex items-center p-3 bg-white border-2 border-gray-200 rounded-lg cursor-pointer peer-checked:border-secondary peer-checked:bg-gray-100 transition-all-300">
+                                        <i class="fa fa-flask text-secondary mr-2"></i>
+                                        <span>科学技术</span>
+                                    </label>
+                                </div>
+                                <div class="interest-option">
+                                    <input type="checkbox" id="interest-nature" name="interests" value="nature" class="hidden peer">
+                                    <label for="interest-nature" class="flex items-center p-3 bg-white border-2 border-gray-200 rounded-lg cursor-pointer peer-checked:border-secondary peer-checked:bg-gray-100 transition-all-300">
+                                        <i class="fa fa-leaf text-secondary mr-2"></i>
+                                        <span>自然生态</span>
+                                    </label>
+                                </div>
+                                <div class="interest-option">
+                                    <input type="checkbox" id="interest-tech" name="interests" value="tech" class="hidden peer">
+                                    <label for="interest-tech" class="flex items-center p-3 bg-white border-2 border-gray-200 rounded-lg cursor-pointer peer-checked:border-secondary peer-checked:bg-gray-100 transition-all-300">
+                                        <i class="fa fa-microchip text-secondary mr-2"></i>
+                                        <span>数字科技</span>
+                                    </label>
+                                </div>
+                                <div class="interest-option">
+                                    <input type="checkbox" id="interest-culture" name="interests" value="culture" class="hidden peer">
+                                    <label for="interest-culture" class="flex items-center p-3 bg-white border-2 border-gray-200 rounded-lg cursor-pointer peer-checked:border-secondary peer-checked:bg-gray-100 transition-all-300">
+                                        <i class="fa fa-globe text-secondary mr-2"></i>
+                                        <span>民俗文化</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 参观时长选择 -->
+                        <div>
+                            <label class="block text-gray-700 font-medium mb-2">
+                                参观时长: <span id="time-value">2</span> 小时
+                            </label>
+                            <input type="range" id="visit-time" name="visit-time" min="1" max="6" step="0.5" value="2" class="w-full">
+                            <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                <span>1小时</span>
+                                <span>3小时</span>
+                                <span>6小时</span>
+                            </div>
+                        </div>
+                        
+                        <!-- 特殊需求 -->
+                        <div>
+                            <label class="block text-gray-700 font-medium mb-2">特殊需求</label>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="special-option">
+                                    <input type="checkbox" id="special-accessible" name="special-needs" value="accessible" class="hidden peer">
+                                    <label for="special-accessible" class="flex items-center p-3 bg-white border-2 border-gray-200 rounded-lg cursor-pointer peer-checked:border-secondary peer-checked:bg-gray-100 transition-all-300">
+                                        <i class="fa fa-wheelchair text-secondary mr-2"></i>
+                                        <span>无障碍通道</span>
+                                    </label>
+                                </div>
+                                <div class="special-option">
+                                    <input type="checkbox" id="special-guide" name="special-needs" value="guide" class="hidden peer">
+                                    <label for="special-guide" class="flex items-center p-3 bg-white border-2 border-gray-200 rounded-lg cursor-pointer peer-checked:border-secondary peer-checked:bg-gray-100 transition-all-300">
+                                        <i class="fa fa-headphones text-secondary mr-2"></i>
+                                        <span>语音导览</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 提交按钮 -->
+                        <button type="submit" id="generate-route-btn" class="w-full bg-gradient-primary text-white font-bold py-3 px-6 rounded-lg shadow hover:shadow-md transition-all-300 flex items-center justify-center">
+                            <i class="fa fa-magic mr-2"></i> 生成个性化路线
+                        </button>
+                    </form>
+                </div>
+                
+                <!-- 路线可视化展示 -->
+                <div class="lg:col-span-2 space-y-6">
+                    <!-- 博物馆地图 -->
+                    <div class="bg-gray-50 rounded-lg p-4 shadow-inner">
+                        <h3 class="text-xl font-semibold text-primary mb-4">博物馆地图与路线</h3>
+                        <div id="museum-map" class="museum-map rounded-lg overflow-hidden border border-gray-200" style="background-image: url('https://free.picui.cn/free/2025/12/04/693126878d2b7.jpg');">
+                            <!-- 路线点将通过JavaScript动态添加 -->
+                            <div id="map-placeholder" class="w-full h-full flex items-center justify-center bg-white bg-opacity-100">
+                                <div class="text-center">
+                                    <i class="fa fa-map-o text-5xl text-gray-300 mb-3"></i>
+                                    <p class="text-gray-500">请设置您的参观偏好并生成路线</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center text-sm ml-auto mt-2">
+                            <span class="inline-block w-3 h-3 rounded-full bg-secondary mr-1"></span>
+                            <span>推荐路线点</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 路线详情 -->
+                    <div id="route-details" class="bg-gray-50 rounded-lg p-4 shadow-inner hidden">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-semibold text-primary">路线详情</h3>
+                            <div class="flex space-x-2">
+                                <button id="print-route-btn" class="bg-white border border-gray-300 text-gray-700 py-1 px-3 rounded flex items-center text-sm hover:bg-gray-100 transition-all-300">
+                                    <i class="fa fa-print mr-1"></i> 打印路线
+                                </button>
+                                <button id="share-route-btn" class="bg-white border border-gray-300 text-gray-700 py-1 px-3 rounded flex items-center text-sm hover:bg-gray-100 transition-all-300">
+                                    <i class="fa fa-share-alt mr-1"></i> 分享
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- 路线概览 -->
+                        <div class="bg-white rounded-lg p-4 mb-4 shadow-sm">
+                            <div class="flex flex-wrap justify-between items-center">
+                                <div>
+                                    <h4 class="font-medium text-primary" id="route-title">历史文化探索路线</h4>
+                                    <p class="text-sm text-gray-600" id="route-description">探索博物馆的精选展区</p>
+                                </div>
+                                <div class="flex items-center mt-2 sm:mt-0">
+                                    <div class="flex items-center mr-4">
+                                        <i class="fa fa-clock-o text-secondary mr-1"></i>
+                                        <span id="route-duration">2小时</span>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <i class="fa fa-map-marker text-secondary mr-1"></i>
+                                        <span id="route-distance">1.2公里</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 时间线 -->
+                        <div class="relative pl-6 border-l-2 border-secondary">
+                            <div id="route-timeline" class="space-y-6">
+                                <!-- 时间线内容将通过JavaScript动态添加 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    <script>
+        // 等待页面加载完成
+        document.addEventListener('DOMContentLoaded', function() {
+            // 获取生成路线按钮
+            const generateBtn = document.getElementById('generate-route-btn');
+            
+            // 为按钮添加点击事件
+            generateBtn.addEventListener('click', function(e) {
+                e.preventDefault(); // 阻止表单默认提交行为
+                
+                // 显示加载状态
+                generateBtn.innerHTML = '<div class="loader mx-auto"></div> 生成中...';
+                generateBtn.disabled = true;
+                
+                // 模拟路线生成（实际项目中可替换为后端API调用）
+                setTimeout(function() {
+                    // 生成路线逻辑
+                    generateRoute();
+                    
+                    // 恢复按钮状态
+                    generateBtn.innerHTML = '<i class="fa fa-magic mr-2"></i> 生成个性化路线';
+                    generateBtn.disabled = false;
+                }, 1500);
+            });
+            
+            // 参观时长滑块值显示
+            const timeSlider = document.getElementById('visit-time');
+            const timeValue = document.getElementById('time-value');
+            
+            timeSlider.addEventListener('input', function() {
+                timeValue.textContent = this.value;
+            });
+            
+            // 打印路线功能
+            document.getElementById('print-route-btn').addEventListener('click', function() {
+                window.print();
+            });
+            
+            // 分享路线功能（模拟）
+            document.getElementById('share-route-btn').addEventListener('click', function() {
+                alert('路线分享功能已触发，可通过社交平台分享链接');
+            });
+        });
+        
+        // 路线生成函数（核心：根据用户偏好动态生成）
+        function generateRoute() {
+            const museumMap = document.getElementById('museum-map');
+            // 清空现有内容（含占位图和旧路线）
+            museumMap.innerHTML = '';
+            
+            // 1. 获取用户选择的偏好参数
+            const ageGroup = document.querySelector('input[name="age-group"]:checked').value;
+            const interests = Array.from(document.querySelectorAll('input[name="interests"]:checked')).map(el => el.value);
+            const visitTime = document.getElementById('visit-time').value;
+            const specialNeeds = Array.from(document.querySelectorAll('input[name="special-needs"]:checked')).map(el => el.value);
+            
+            // 2. 根据偏好匹配对应的路线点坐标（模拟不同展厅位置）
+            let points = [];
+            if (ageGroup === 'child') {
+                // 儿童路线：互动性强的展厅，路线更平缓
+                points = [{x: 25, y: 0}, {x: 40, y: 65}, {x: 55, y: 70}, {x: 70, y: 65}];
+            } else if (ageGroup === 'teen') {
+                // 青少年路线
+                points = [{x: 48, y: 58}, {x: 30, y: 57}, {x: 28, y: 22}, {x: 68, y: 30}];
+            } else if (interests.includes('art')) {
+                // 艺术类路线
+                points = [{x: 30, y: 40}, {x: 48, y: 45}, {x: 60, y: 50}, {x: 75, y: 48}, {x: 90, y: 47}];
+            } else if (interests.includes('science')) {
+                // 科学类路线
+                points = [{x: 22, y: 55}, {x: 38, y: 58}, {x: 53, y: 62}, {x: 68, y: 59}];
+            } else {
+                // 默认历史文化路线
+                points = [{x: 18, y: 25}, {x: 33, y: 30}, {x: 48, y: 28}, {x: 63, y: 33}, {x: 78, y: 31}];
+            }
+            
+            // 3. 无障碍需求适配：调整路线点为平缓路径
+            if (specialNeeds.includes('accessible')) {
+                points = points.map(point => ({x: point.x, y: point.y - 5})); // 降低y轴坐标，模拟平缓路线
+            }
+            
+            // 4. 根据参观时长调整路线点数量
+            const maxPoints = Math.min(Math.floor(visitTime * 2) + 1, points.length);
+            points = points.slice(0, maxPoints);
+            
+            // 5. 生成路线点（带动画延迟）
+            points.forEach((point, index) => {
+                const pointEl = document.createElement('div');
+                pointEl.className = `route-point animate-fadeIn`;
+                pointEl.style.left = `${point.x}%`;
+                pointEl.style.top = `${point.y}%`;
+                pointEl.style.animationDelay = `${index * 150}ms`;
+                pointEl.title = `展区 ${index + 1}`;
+                museumMap.appendChild(pointEl);
+            });
+            
+            // 6. 显示动态路线详情
+            showRouteDetails(points, ageGroup, interests, visitTime, specialNeeds);
+        }
+        
+        // 显示路线详情
+        function showRouteDetails(points, ageGroup, interests, visitTime, specialNeeds) {
+            // 显示隐藏的区域
+            document.getElementById('route-details').classList.remove('hidden');
+            
+            // 1. 更新路线概览信息
+            const routeTitle = document.getElementById('route-title');
+            const routeDesc = document.getElementById('route-description');
+            const routeDuration = document.getElementById('route-duration');
+            const routeDistance = document.getElementById('route-distance');
+            
+            // 生成路线标题
+            let title = '';
+            if (ageGroup === 'child') title += '儿童专属';
+            else if (ageGroup === 'senior') title += '老年友好';
+            else if (ageGroup === 'family') title += '家庭亲子';
+            title += interests.join('+');
+            title += '路线';
+            routeTitle.textContent = title;
+            
+            // 生成路线描述
+            let desc = `适配${visitTime}小时参观，涵盖${points.length}个核心展区`;
+            if (specialNeeds.includes('accessible')) desc += '，已优化为无障碍路线';
+            if (ageGroup === 'child') desc += '，互动性强，适合儿童认知学习';
+            else if (ageGroup === 'senior') desc += '，路线平缓，重点展品优先';
+            routeDesc.textContent = desc;
+            
+            // 更新时长和距离
+            routeDuration.textContent = `${visitTime}小时`;
+            const distance = (points.length * 0.25).toFixed(1); // 每个展区间隔约0.25公里
+            routeDistance.textContent = `${distance}公里`;
+            
+            // 2. 生成时间线内容
+            const timeline = document.getElementById('route-timeline');
+            timeline.innerHTML = '';
+            const perExhibitTime = Math.round((visitTime * 60) / points.length); // 每个展区的建议参观时间
+            
+            points.forEach((point, index) => {
+                const timelineItem = document.createElement('div');
+                timelineItem.className = `timeline-item animate-fadeIn`;
+                timelineItem.style.animationDelay = `${index * 200}ms`;
+                timelineItem.innerHTML = `
+                    <div class="timeline-dot"></div>
+                    <div class="ml-4 bg-white p-3 rounded-lg shadow-sm">
+                        <h4 class="font-medium text-primary">${index + 1}. 展区 ${index + 1}</h4>
+                        <p class="text-sm text-gray-600">建议参观时长：${perExhibitTime}分钟</p>
+                    </div>
+                `;
+                timeline.appendChild(timelineItem);
+            });
+        }
+    </script>
+</body>
+</html>
